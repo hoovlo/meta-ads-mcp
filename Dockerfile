@@ -21,5 +21,16 @@ RUN uv pip install --system -r requirements.txt
 # Copy the rest of the application
 COPY . .
 
-# Command to run the Meta Ads MCP server
-CMD ["python", "-m", "meta_ads_mcp"] 
+# Install the package
+RUN pip install -e .
+
+# Expose port (Railway uses PORT env var)
+EXPOSE 8080
+
+# Default environment variables
+ENV PORT=8080
+ENV HOST=0.0.0.0
+
+# Command to run the Meta Ads MCP server with HTTP transport
+# Railway sets PORT automatically, we use shell form to expand variables
+CMD python -m meta_ads_mcp --transport streamable-http --host $HOST --port $PORT 
