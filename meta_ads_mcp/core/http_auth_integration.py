@@ -274,7 +274,10 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
                     }
                 )
 
-            # Require API key in Authorization header: "Bearer <MCP_API_KEY>"
+            # Require API key via multiple methods:
+            # 1. Authorization: Bearer <key>
+            # 2. X-API-Key header
+            # 3. URL query parameter: ?api_key=<key>
             auth_header = request.headers.get("authorization", "")
             provided_key = None
 
@@ -284,6 +287,10 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
             # Also check X-API-Key header as alternative
             if not provided_key:
                 provided_key = request.headers.get("x-api-key", "")
+
+            # Also check URL query parameter (for Claude.ai web which doesn't support custom headers)
+            if not provided_key:
+                provided_key = request.query_params.get("api_key", "")
 
             if not provided_key:
                 logger.warning(f"HTTP Auth Middleware: No API key provided for {request.url.path}")
