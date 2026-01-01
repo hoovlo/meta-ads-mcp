@@ -248,9 +248,41 @@ import json # Ensure json is imported if not already at the top
 
 class AuthInjectionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        from starlette.responses import JSONResponse
+
         logger.debug(f"HTTP Auth Middleware: Processing request to {request.url.path}")
         logger.debug(f"HTTP Auth Middleware: Request headers: {list(request.headers.keys())}")
-        
+
+        # Check for API key protection (skip for health check endpoint)
+        mcp_api_key = os.environ.get("MCP_API_KEY")
+        if mcp_api_key and request.url.path != "/health":
+            # Require API key in Authorization header: "Bearer <MCP_API_KEY>"
+            auth_header = request.headers.get("authorization", "")
+            provided_key = None
+
+            if auth_header.lower().startswith("bearer "):
+                provided_key = auth_header[7:].strip()
+
+            # Also check X-API-Key header as alternative
+            if not provided_key:
+                provided_key = request.headers.get("x-api-key", "")
+
+            if provided_key != mcp_api_key:
+                logger.warning(f"HTTP Auth Middleware: Invalid or missing API key for {request.url.path}")
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32001,
+                            "message": "Unauthorized: Invalid or missing API key",
+                            "data": "Provide API key via 'Authorization: Bearer <key>' or 'X-API-Key: <key>' header"
+                        },
+                        "id": None
+                    }
+                )
+            logger.debug("HTTP Auth Middleware: API key validated successfully")
+
         # Extract both types of tokens for dual-header authentication
         auth_token = FastMCPAuthIntegration.extract_token_from_headers(dict(request.headers))
         pipeboard_token = FastMCPAuthIntegration.extract_pipeboard_token_from_headers(dict(request.headers))
