@@ -316,10 +316,19 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
                 )
             logger.debug("HTTP Auth Middleware: API key validated successfully")
 
-        # Extract both types of tokens for dual-header authentication
+        # Extract tokens for Meta API authentication
+        # IMPORTANT: Don't use the MCP_API_KEY as Meta token - they are different!
+        mcp_api_key = os.environ.get("MCP_API_KEY", "")
+
         auth_token = FastMCPAuthIntegration.extract_token_from_headers(dict(request.headers))
         pipeboard_token = FastMCPAuthIntegration.extract_pipeboard_token_from_headers(dict(request.headers))
-        
+
+        # If the extracted auth token is the MCP_API_KEY, don't use it for Meta API
+        # Instead, rely on META_ACCESS_TOKEN environment variable
+        if auth_token and mcp_api_key and auth_token == mcp_api_key:
+            logger.debug("HTTP Auth Middleware: Bearer token is MCP_API_KEY, not using for Meta API")
+            auth_token = None  # Clear it so META_ACCESS_TOKEN from env is used
+
         if auth_token:
             logger.debug(f"HTTP Auth Middleware: Extracted auth token: {auth_token[:10]}...")
             logger.debug("Injecting auth token into request context")
