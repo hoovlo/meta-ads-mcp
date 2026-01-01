@@ -6,12 +6,57 @@ import os
 import sys
 import webbrowser
 import json
+import re
 from typing import Dict, Any, Optional
 from .auth import login as login_auth
 from .resources import list_resources, get_resource
 from .utils import logger
 from .pipeboard_auth import pipeboard_auth_manager
 import time
+
+
+def env_expandable_int(value: str) -> int:
+    """
+    Custom argparse type that handles environment variable expansion.
+
+    This fixes Railway deployment where $PORT may be passed as a literal string
+    instead of being expanded by the shell.
+
+    Args:
+        value: String value that may be an env var reference like "$PORT" or a number
+
+    Returns:
+        Integer value after expansion
+
+    Raises:
+        argparse.ArgumentTypeError: If value cannot be converted to int
+    """
+    original_value = value
+
+    # Handle $VAR or ${VAR} syntax
+    if isinstance(value, str):
+        # Pattern for $VAR or ${VAR}
+        if value.startswith('$'):
+            # Extract variable name (handles $VAR and ${VAR})
+            match = re.match(r'^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$', value)
+            if match:
+                var_name = match.group(1)
+                env_value = os.environ.get(var_name)
+                if env_value is not None:
+                    value = env_value
+                    logger.info(f"Expanded environment variable ${var_name} = {value}")
+                else:
+                    raise argparse.ArgumentTypeError(
+                        f"Environment variable {var_name} is not set (received '{original_value}')"
+                    )
+
+    # Convert to int
+    try:
+        return int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid integer value: '{original_value}' (resolved to '{value}')"
+        )
 
 # Initialize FastMCP server
 mcp_server = FastMCP("meta-ads")
@@ -219,8 +264,8 @@ def main():
     parser.add_argument("--transport", type=str, choices=["stdio", "streamable-http"], 
                        default="stdio", 
                        help="Transport method: 'stdio' for MCP clients (default), 'streamable-http' for HTTP API access")
-    parser.add_argument("--port", type=int, default=8080, 
-                       help="Port for Streamable HTTP transport (default: 8080, only used with --transport streamable-http)")
+    parser.add_argument("--port", type=env_expandable_int, default=8080,
+                       help="Port for Streamable HTTP transport (default: 8080, supports $PORT env var)")
     parser.add_argument("--host", type=str, default="localhost", 
                        help="Host for Streamable HTTP transport (default: localhost, only used with --transport streamable-http)")
     parser.add_argument("--sse-response", action="store_true", 

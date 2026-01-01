@@ -24,8 +24,8 @@ COPY . .
 # Install the package
 RUN pip install -e .
 
-# Make start script executable
-RUN chmod +x start.sh
+# Fix potential Windows line endings (CRLF -> LF) and make executable
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
 # Expose port (Railway uses PORT env var)
 EXPOSE 8080
@@ -34,5 +34,6 @@ EXPOSE 8080
 ENV PORT=8080
 ENV HOST=0.0.0.0
 
-# Use startup script for proper variable expansion
-CMD ["./start.sh"] 
+# Run directly with Python - the server.py now handles $PORT expansion
+# This is more robust than relying on shell variable expansion
+CMD ["python", "-m", "meta_ads_mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "$PORT"] 
