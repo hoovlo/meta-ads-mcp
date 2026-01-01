@@ -255,8 +255,25 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
         logger.debug(f"HTTP Auth Middleware: Request headers: {list(request.headers.keys())}")
 
         # Check for API key protection (skip for health check endpoint)
-        mcp_api_key = os.environ.get("MCP_API_KEY")
-        if mcp_api_key and request.url.path != "/health":
+        if request.url.path != "/health":
+            mcp_api_key = os.environ.get("MCP_API_KEY")
+
+            # SECURITY: If MCP_API_KEY is not configured, block all requests
+            if not mcp_api_key:
+                logger.error("HTTP Auth Middleware: MCP_API_KEY not configured - blocking request")
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32002,
+                            "message": "Forbidden: Server not configured",
+                            "data": "MCP_API_KEY environment variable must be set on the server"
+                        },
+                        "id": None
+                    }
+                )
+
             # Require API key in Authorization header: "Bearer <MCP_API_KEY>"
             auth_header = request.headers.get("authorization", "")
             provided_key = None
@@ -268,16 +285,31 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
             if not provided_key:
                 provided_key = request.headers.get("x-api-key", "")
 
-            if provided_key != mcp_api_key:
-                logger.warning(f"HTTP Auth Middleware: Invalid or missing API key for {request.url.path}")
+            if not provided_key:
+                logger.warning(f"HTTP Auth Middleware: No API key provided for {request.url.path}")
                 return JSONResponse(
                     status_code=401,
                     content={
                         "jsonrpc": "2.0",
                         "error": {
                             "code": -32001,
-                            "message": "Unauthorized: Invalid or missing API key",
+                            "message": "Unauthorized: API key required",
                             "data": "Provide API key via 'Authorization: Bearer <key>' or 'X-API-Key: <key>' header"
+                        },
+                        "id": None
+                    }
+                )
+
+            if provided_key != mcp_api_key:
+                logger.warning(f"HTTP Auth Middleware: Invalid API key for {request.url.path}")
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32001,
+                            "message": "Unauthorized: Invalid API key",
+                            "data": "The provided API key is incorrect"
                         },
                         "id": None
                     }
