@@ -7,6 +7,7 @@ from HTTP headers into the tool execution context.
 
 import asyncio
 import contextvars
+import os
 from typing import Optional
 from .utils import logger
 import json
