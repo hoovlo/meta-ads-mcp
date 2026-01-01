@@ -279,14 +279,36 @@ class AuthInjectionMiddleware(BaseHTTPMiddleware):
                 FastMCPAuthIntegration.clear_pipeboard_token()
 
 def setup_starlette_middleware(app):
-    """Add AuthInjectionMiddleware to the Starlette app if not already present.
-    
+    """Add AuthInjectionMiddleware and health check route to the Starlette app.
+
     Args:
         app: Starlette app instance
     """
     if not app:
         logger.error("Cannot setup Starlette middleware, app is None.")
         return
+
+    # Add health check route for Railway/container health checks
+    from starlette.routing import Route
+    from starlette.responses import JSONResponse
+
+    async def health_check(request):
+        """Health check endpoint for container orchestration platforms."""
+        return JSONResponse({"status": "healthy", "service": "meta-ads-mcp"})
+
+    # Check if health route already exists
+    health_route_exists = any(
+        getattr(route, 'path', None) == '/health'
+        for route in getattr(app, 'routes', [])
+    )
+
+    if not health_route_exists:
+        try:
+            health_route = Route('/health', health_check, methods=['GET', 'HEAD'])
+            app.routes.insert(0, health_route)  # Insert at beginning for priority
+            logger.info("Health check route /health added to Starlette app.")
+        except Exception as e:
+            logger.error(f"Failed to add health check route: {e}", exc_info=True)
 
     # Check if our specific middleware class is already in the stack
     already_added = False
@@ -296,7 +318,7 @@ def setup_starlette_middleware(app):
         if middleware_item.cls == AuthInjectionMiddleware:
             already_added = True
             break
-            
+
     if not already_added:
         try:
             app.add_middleware(AuthInjectionMiddleware)
