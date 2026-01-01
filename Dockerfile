@@ -24,6 +24,9 @@ COPY . .
 # Install the package
 RUN pip install -e .
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Expose port (Railway uses PORT env var)
 EXPOSE 8080
 
@@ -31,6 +34,5 @@ EXPOSE 8080
 ENV PORT=8080
 ENV HOST=0.0.0.0
 
-# Command to run the Meta Ads MCP server with HTTP transport
-# Use /bin/sh -c to ensure variable expansion works
-CMD ["/bin/sh", "-c", "python -m meta_ads_mcp --transport streamable-http --host $HOST --port $PORT"] 
+# Use startup script for proper variable expansion
+CMD ["./start.sh"] 
